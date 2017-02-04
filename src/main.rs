@@ -2,35 +2,47 @@ use std::io::{self, Write};
 use std::fmt;
 use std::process;
 
+fn abort(message: &'static str) {
+    println!("{}", message);
+    process::exit(1);
+}
+
 fn main() {
     let mut board = Board::new();
     println!("{}", board);
 
     loop {
-        print!("\nWhere you would like to go? Press 0-8: ");
-        io::stdout().flush().unwrap();
-        let mut buffer = String::new();
-        io::stdin().read_line(&mut buffer).unwrap();
+        let position = prompt_for_position();
 
-        let position: u8 = buffer.trim().parse().expect("invalid position");
+        let res: Result<(), &'static str> = board.play_x(position);
+        res.unwrap_or_else(abort);
+        check_for_winner(&board);
 
-        board.play_x(position);
-        if board.winner().is_some() {
-            println!("\n{}", board);
-            println!("\nWinner: {}", board.winner().unwrap());
-            process::exit(0);
-        }
-        board.play_o();
-        if board.winner().is_some() {
-            println!("\n{}", board);
-            println!("\nWinner: {}", board.winner().unwrap());
-            process::exit(0);
-        }
+        board.play_o().unwrap();
+        check_for_winner(&board);
+
         println!("\n{}", board);
     }
 }
 
+fn prompt_for_position() -> u8 {
+    print!("\nWhere you would like to go? Press 0-8: ");
+    io::stdout().flush().unwrap();
+    let mut buffer = String::new();
+    io::stdin().read_line(&mut buffer).unwrap();
+    buffer.trim().parse().expect("invalid position")
+}
+
+fn check_for_winner(board: &Board) {
+    if board.winner().is_some() {
+        println!("\n{}", board);
+        println!("\nWinner: {}", board.winner().unwrap());
+        process::exit(0);
+    }
+}
+
 #[derive(PartialEq)]
+#[derive(Copy,Clone)]
 enum Player {
     X,
     O,
@@ -58,12 +70,18 @@ impl Tile {
         }
     }
 
-    fn play_x(&mut self) {
-        self.owner = Some(Player::X);
+    fn play_x(&mut self) -> Result<(), &'static str> {
+        match self.owner {
+            Some(_) => Err("Tile already occupied"),
+            None => Ok({ self.owner = Some(Player::X) }),
+        }
     }
 
-    fn play_o(&mut self) {
-        self.owner = Some(Player::O);
+    fn play_o(&mut self) -> Result<(), &'static str> {
+        match self.owner {
+            Some(_) => Err("Tile already occupied"),
+            None => Ok({ self.owner = Some(Player::O) }),
+        }
     }
 }
 
@@ -92,18 +110,14 @@ impl Board {
         }
     }
 
-    fn play_x(&mut self, position: u8) {
+    fn play_x(&mut self, position: u8) -> Result<(), &'static str>  {
         let tile = &mut self.tiles[position as usize];
-        if tile.owner == None {
-            tile.play_x();
-        } else {
-            panic!("tile already occupied");
-        }
+        tile.play_x()
     }
 
-    fn play_o(&mut self) {
+    fn play_o(&mut self) -> Result<(), &'static str> {
         let tile = self.pick_empty_tile();
-        tile.play_o();
+        tile.play_o()
     }
 
     fn pick_empty_tile(&mut self) -> &mut Tile {
@@ -114,35 +128,8 @@ impl Board {
         tile
     }
 
-    fn has_winner(&self) -> bool {
-        let winning_positions = [
-            [0, 1, 2],
-            [3, 4, 5],
-            [6, 7, 8],
-            [0, 3, 6],
-            [1, 4, 7],
-            [2, 5, 8],
-            [0, 4, 8],
-            [6, 4, 2],
-        ];
-        winning_positions.iter().any(|&winning_position| {
-            let tiles = [
-                &self.tiles[winning_position[0]],
-                &self.tiles[winning_position[1]],
-                &self.tiles[winning_position[2]],
-                ];
-            (tiles[0].owner != None &&
-             tiles[1].owner != None &&
-             tiles[2].owner != None
-            ) && (
-                tiles[0].owner == tiles[1].owner &&
-                tiles[1].owner == tiles[2].owner
-                )
-        })
-    }
-
     fn winner(&self) -> Option<Player> {
-        let winning_positions = [
+        const winning_positions: [[usize; 3]; 8] = [
             [0, 1, 2],
             [3, 4, 5],
             [6, 7, 8],
@@ -152,27 +139,15 @@ impl Board {
             [0, 4, 8],
             [6, 4, 2],
         ];
-        for winning_position in winning_positions.iter() {
-            let tiles = [
-                &self.tiles[winning_position[0]],
-                &self.tiles[winning_position[1]],
-                &self.tiles[winning_position[2]],
-                ];
-            if (tiles[0].owner != None &&
-             tiles[1].owner != None &&
-             tiles[2].owner != None
-            ) && (
-                tiles[0].owner == tiles[1].owner &&
-                tiles[1].owner == tiles[2].owner
-                ) {
-                return match tiles[0].owner {
-                    Some(Player::X) => Some(Player::X),
-                    Some(Player::O) => Some(Player::O),
-                    None => None,
-                }
-            }
-        }
-        None
+        winning_positions.iter().map(|winning_position| {
+            [
+                self.tiles[winning_position[0]].owner,
+                self.tiles[winning_position[1]].owner,
+                self.tiles[winning_position[2]].owner,
+            ]
+        }).find(|owners| {
+            owners.iter().all(|owner| owner.is_some() && *owner == owners[0])
+        }).map(|owners| owners[0].unwrap())
     }
 }
 
