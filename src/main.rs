@@ -1,43 +1,60 @@
 use std::io::{self, Write};
 use std::fmt;
 use std::process;
+use std::num::ParseIntError;
 
-fn abort(message: &'static str) {
-    println!("{}", message);
-    process::exit(1);
-}
+// 43278 => Draw
 
 fn main() {
     let mut board = Board::new();
     println!("{}", board);
 
     loop {
-        let position = prompt_for_position();
+        let position = match prompt_for_position() {
+            Ok(position) => position,
+            Err(_) => {
+                println!("\nInvalid position");
+                continue;
+            },
+        };
 
-        let res: Result<(), &'static str> = board.play_x(position);
-        res.unwrap_or_else(abort);
-        check_for_winner(&board);
+        match board.play_x(position) {
+            Ok(_) => {
+                check_for_winner(&board);
 
-        board.play_o().unwrap();
-        check_for_winner(&board);
+                board.play_o();
+                check_for_winner(&board);
 
-        println!("\n{}", board);
+                println!("\n{}", board);
+            },
+            Err(message) => {
+                println!("\n{}", message);
+            },
+        }
     }
 }
 
-fn prompt_for_position() -> u8 {
+fn prompt_for_position() -> Result<u8, ParseIntError> {
     print!("\nWhere you would like to go? Press 0-8: ");
     io::stdout().flush().unwrap();
     let mut buffer = String::new();
     io::stdin().read_line(&mut buffer).unwrap();
-    buffer.trim().parse().expect("invalid position")
+    buffer.trim().parse()
 }
 
 fn check_for_winner(board: &Board) {
-    if board.winner().is_some() {
-        println!("\n{}", board);
-        println!("\nWinner: {}", board.winner().unwrap());
-        process::exit(0);
+    match board.outcome() {
+        Some(GameOutcome::Winner(player)) => {
+            println!("\n{}", board);
+            println!("\nWinner: {}", player);
+            process::exit(0);
+        },
+        Some(GameOutcome::Draw) => {
+            println!("\n{}", board);
+            println!("\nDraw!");
+            process::exit(0);
+        },
+        None => (),
     }
 }
 
@@ -77,11 +94,8 @@ impl Tile {
         }
     }
 
-    fn play_o(&mut self) -> Result<(), &'static str> {
-        match self.owner {
-            Some(_) => Err("Tile already occupied"),
-            None => Ok({ self.owner = Some(Player::O) }),
-        }
+    fn play_o(&mut self) {
+        self.owner = Some(Player::O);
     }
 }
 
@@ -93,6 +107,11 @@ impl std::fmt::Display for Tile {
             Some(Player::O) => write!(f, "O"),
         }
     }
+}
+
+enum GameOutcome {
+    Winner(Player),
+    Draw,
 }
 
 struct Board {
@@ -111,25 +130,34 @@ impl Board {
     }
 
     fn play_x(&mut self, position: u8) -> Result<(), &'static str>  {
-        let tile = &mut self.tiles[position as usize];
-        tile.play_x()
+        let tile = self.tiles.get_mut(position as usize);
+        match tile {
+            Some(tile) => tile.play_x(),
+            None => Err("Invalid position"),
+        }
     }
 
-    fn play_o(&mut self) -> Result<(), &'static str> {
-        let tile = self.pick_empty_tile();
-        tile.play_o()
+    fn play_o(&mut self) {
+        let tile = self.pick_empty_tile_mut();
+        if tile.is_some() {
+            tile.unwrap().play_o();
+        }
     }
 
-    fn pick_empty_tile(&mut self) -> &mut Tile {
-        let tile: &mut Tile = self.tiles
+    fn pick_empty_tile(&self) -> Option<&Tile> {
+        self.tiles
+            .iter()
+            .find(|ref t| t.owner == None)
+    }
+
+    fn pick_empty_tile_mut(&mut self) -> Option<&mut Tile> {
+        self.tiles
             .iter_mut()
             .find(|ref t| t.owner == None)
-            .expect("Draw!");
-        tile
     }
 
     fn winner(&self) -> Option<Player> {
-        const winning_positions: [[usize; 3]; 8] = [
+        const WINNING_POSITIONS: [[usize; 3]; 8] = [
             [0, 1, 2],
             [3, 4, 5],
             [6, 7, 8],
@@ -139,7 +167,7 @@ impl Board {
             [0, 4, 8],
             [6, 4, 2],
         ];
-        winning_positions.iter().map(|winning_position| {
+        WINNING_POSITIONS.iter().map(|winning_position| {
             [
                 self.tiles[winning_position[0]].owner,
                 self.tiles[winning_position[1]].owner,
@@ -148,6 +176,21 @@ impl Board {
         }).find(|owners| {
             owners.iter().all(|owner| owner.is_some() && *owner == owners[0])
         }).map(|owners| owners[0].unwrap())
+    }
+
+    fn is_draw(&self) -> bool {
+        let tile = self.pick_empty_tile();
+        tile.is_none() && self.winner().is_none()
+    }
+
+    fn outcome(&self) -> Option<GameOutcome> {
+        if self.winner().is_some() {
+            Some(GameOutcome::Winner(self.winner().unwrap()))
+        } else if self.is_draw() {
+            Some(GameOutcome::Draw)
+        } else {
+            None
+        }
     }
 }
 
