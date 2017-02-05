@@ -1,57 +1,97 @@
 use std::io::{self, Write};
 use std::fmt;
 use std::process;
-use std::num::ParseIntError;
+use std::result;
 
 // 43278 => Draw
+#[derive(Debug)]
+enum BadMoveError {
+    InvalidPosition,
+    AlreadyOccupied,
+}
 
-fn main() {
-    let mut board = Board::new();
-    println!("{}", board);
-
-    loop {
-        let position = match prompt_for_position() {
-            Ok(position) => position,
-            Err(_) => {
-                println!("\nInvalid position");
-                continue;
-            },
-        };
-
-        match board.play_x(position) {
-            Ok(_) => {
-                check_for_winner(&board);
-
-                board.play_o();
-                check_for_winner(&board);
-
-                println!("\n{}", board);
-            },
-            Err(message) => {
-                println!("\n{}", message);
-            },
+impl fmt::Display for BadMoveError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match *self {
+            BadMoveError::InvalidPosition => write!(f, "Invalid position"),
+            BadMoveError::AlreadyOccupied => write!(f, "Position already occupied"),
         }
     }
 }
 
-fn prompt_for_position() -> Result<u8, ParseIntError> {
+type Result<T> = result::Result<T, BadMoveError>;
+
+fn main() {
+    let mut board = Board::new();
+    loop {
+        println!("\n{}", board);
+        // let position = match prompt_for_position() {
+        //     Ok(position) => position,
+        //     Err(error) => {
+        //         println!("\n{}", error);
+        //         continue;
+        //     },
+        // };
+        // match board.play_x(position) {
+        //     Ok(_) => {
+        //         check_for_winner(&board);
+        //         board.play_o();
+        //         check_for_winner(&board);
+        //     },
+        //     Err(message) => {
+        //         println!("\n{}", message);
+        //     },
+        // }
+
+        // prompt_for_position().and_then(|position| {
+        //     board.play_x(position)
+        // }).and_then(|_| {
+        //     check_for_winner(&board);
+        //     board.play_o();
+        //     check_for_winner(&board);
+        //     Ok(())
+        // }).or_else(|error| -> Result<()> {
+        //     println!("\n{}", error);
+        //     Ok(())
+        // }).unwrap();
+
+        match prompt_for_position().and_then(|position| {
+            board.play_x(position)
+        }) {
+            Ok(_) => {
+                check_for_winner(&board);
+                board.play_o();
+                check_for_winner(&board);
+            },
+            Err(error) => println!("\n{}", error),
+        }
+    }
+}
+
+fn prompt_for_position() -> Result<u8> {
     print!("\nWhere you would like to go? Press 0-8: ");
     io::stdout().flush().unwrap();
     let mut buffer = String::new();
     io::stdin().read_line(&mut buffer).unwrap();
-    buffer.trim().parse()
+    match buffer.trim().parse() {
+        Ok(position @ 0 ... 8) => Ok(position),
+        _ => Err(BadMoveError::InvalidPosition),
+    }
 }
 
 fn check_for_winner(board: &Board) {
     match board.outcome() {
         Some(GameOutcome::Winner(player)) => {
             println!("\n{}", board);
-            println!("\nWinner: {}", player);
+            match player {
+                Player::X => println!("\nYou won!"),
+                Player::O => println!("\nYou lost."),
+            }
             process::exit(0);
         },
         Some(GameOutcome::Draw) => {
             println!("\n{}", board);
-            println!("\nDraw!");
+            println!("\nDraw.");
             process::exit(0);
         },
         None => (),
@@ -87,9 +127,9 @@ impl Tile {
         }
     }
 
-    fn play_x(&mut self) -> Result<(), &'static str> {
+    fn play_x(&mut self) -> Result<()> {
         match self.owner {
-            Some(_) => Err("Tile already occupied"),
+            Some(_) => Err(BadMoveError::AlreadyOccupied),
             None => Ok({ self.owner = Some(Player::X) }),
         }
     }
@@ -129,31 +169,18 @@ impl Board {
         }
     }
 
-    fn play_x(&mut self, position: u8) -> Result<(), &'static str>  {
-        let tile = self.tiles.get_mut(position as usize);
-        match tile {
-            Some(tile) => tile.play_x(),
-            None => Err("Invalid position"),
-        }
+    fn play_x(&mut self, position: u8) -> Result<()>  {
+        self.tiles[position as usize].play_x()
     }
 
     fn play_o(&mut self) {
-        let tile = self.pick_empty_tile_mut();
-        if tile.is_some() {
-            tile.unwrap().play_o();
-        }
+        self.pick_empty_tile().map(|tile| {
+            tile.play_o();
+        });
     }
 
-    fn pick_empty_tile(&self) -> Option<&Tile> {
-        self.tiles
-            .iter()
-            .find(|ref t| t.owner == None)
-    }
-
-    fn pick_empty_tile_mut(&mut self) -> Option<&mut Tile> {
-        self.tiles
-            .iter_mut()
-            .find(|ref t| t.owner == None)
+    fn pick_empty_tile(&mut self) -> Option<&mut Tile> {
+        self.tiles.iter_mut().find(|ref t| t.owner.is_none())
     }
 
     fn winner(&self) -> Option<Player> {
@@ -179,8 +206,7 @@ impl Board {
     }
 
     fn is_draw(&self) -> bool {
-        let tile = self.pick_empty_tile();
-        tile.is_none() && self.winner().is_none()
+        self.tiles.iter().all(|t| t.owner.is_some()) && self.winner().is_none()
     }
 
     fn outcome(&self) -> Option<GameOutcome> {
