@@ -17,17 +17,21 @@ impl Tile {
     }
 
     pub fn play_x(&mut self) -> Result<()> {
+        self.play(Player::X)
+    }
+
+    pub fn play_o(&mut self) -> Result<()> {
+        self.play(Player::O)
+    }
+
+    pub fn play(&mut self, player: Player) -> Result<()> {
         match self.owner {
             Some(_) => Err(BadMoveError::AlreadyOccupied),
             None => {
-                self.owner = Some(Player::X);
+                self.owner = Some(player);
                 Ok(())
             }
         }
-    }
-
-    pub fn play_o(&mut self) {
-        self.owner = Some(Player::O);
     }
 }
 

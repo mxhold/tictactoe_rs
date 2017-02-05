@@ -18,14 +18,15 @@ fn main() {
     loop {
         println!("\n{}", board);
 
-        match prompt_for_position().and_then(|position| board.play_x(position)) {
-            Ok(_) => {
-                check_for_winner(&board);
-                board.play_o();
-                check_for_winner(&board);
-            }
-            Err(error) => println!("\n{}", error),
-        }
+        prompt_for_position()
+            .and_then(|position| board.play_x(position))
+            .and_then(|outcome| check_for_winner(outcome, &board))
+            .and_then(|_| board.play_o())
+            .and_then(|outcome| check_for_winner(outcome, &board))
+            .or_else(|error| -> Result<()> {
+                println!("\n{}", error);
+                Ok(())
+            }).unwrap();
     }
 }
 
@@ -42,8 +43,8 @@ fn prompt_for_position() -> Result<u8> {
     }
 }
 
-fn check_for_winner(board: &Board) {
-    match board.outcome() {
+fn check_for_winner(outcome: Option<GameOutcome>, board: &Board) -> Result<()> {
+    match outcome {
         Some(GameOutcome::Winner(player)) => {
             println!("\n{}", board);
             match player {
@@ -57,6 +58,9 @@ fn check_for_winner(board: &Board) {
             println!("\nDraw.");
             process::exit(0);
         }
-        None => (),
+        None => {
+            Ok(())
+        }
     }
 }
+

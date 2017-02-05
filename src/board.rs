@@ -24,14 +24,15 @@ impl Board {
         }
     }
 
-    pub fn play_x(&mut self, position: u8) -> Result<()> {
-        self.tiles[position as usize].play_x()
+    pub fn play_x(&mut self, position: u8) -> Result<Option<GameOutcome>> {
+        self.tiles[position as usize].play_x().map(|_| self.outcome())
     }
 
-    pub fn play_o(&mut self) {
+    pub fn play_o(&mut self) -> Result<Option<GameOutcome>> {
         self.pick_empty_tile().map(|tile| {
-            tile.play_o();
-        });
+            tile.play_o().unwrap();
+        }).unwrap();
+        Ok(self.outcome())
     }
 
     fn pick_empty_tile(&mut self) -> Option<&mut Tile> {
