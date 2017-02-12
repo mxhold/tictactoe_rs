@@ -1,7 +1,6 @@
 use std::fmt;
 
-#[derive(PartialEq)]
-#[derive(Copy,Clone)]
+#[derive(Copy,Clone,Debug,PartialEq)]
 pub enum Player {
     X,
     O,

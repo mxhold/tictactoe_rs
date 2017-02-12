@@ -7,6 +7,7 @@ pub struct Board {
     tiles: [Tile; 9],
 }
 
+#[derive(Debug,PartialEq)]
 pub enum GameOutcome {
     Winner(Player),
     Draw,

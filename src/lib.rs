@@ -9,7 +9,7 @@ use player::Player;
 pub mod board;
 pub mod error;
 mod tile;
-mod player;
+pub mod player;
 
 pub fn prompt_for_position() -> Result<u8> {
     print!("\nWhere you would like to go? Press 0-8: ");
